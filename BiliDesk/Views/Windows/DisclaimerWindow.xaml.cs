@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Input;
 using BiliDesk.Views;
 
 namespace BiliDesk.Views.Windows;
@@ -43,6 +44,35 @@ public partial class DisclaimerWindow : FluentWindow
     {
         // 没点过按钮就关闭 = 不同意(只读模式不参与这个判断)
         if (!_viewer && !_decided) Agreed = false;
+    }
+
+    internal void EnableRemoteNavigation()
+    {
+        Loaded += (_, _) => BtnDecline.Focus();
+        PreviewKeyDown += (_, args) =>
+        {
+            switch (args.Key)
+            {
+                case Key.Left:
+                case Key.Right:
+                    if (BtnAccept.IsKeyboardFocused) BtnDecline.Focus();
+                    else BtnAccept.Focus();
+                    break;
+                case Key.Enter when BtnAccept.IsKeyboardFocused || BtnDecline.IsKeyboardFocused:
+                    if (args.IsRepeat) break;
+                    if (BtnAccept.IsKeyboardFocused) OnAcceptClick(this, args);
+                    else OnDeclineClick(this, args);
+                    break;
+                case Key.Escape:
+                case Key.BrowserBack:
+                case Key.Back:
+                    Close();
+                    break;
+                default:
+                    return;
+            }
+            args.Handled = true;
+        };
     }
 
     private void OnAcceptClick(object sender, RoutedEventArgs e)

@@ -171,7 +171,8 @@ public class SettingsViewModel : ObservableObject
     public string RuntimeInfo => ".NET 10 / WPF";
 
     /// <summary>「关于 → 版本号」一栏右侧显示的版本(与 App.AppVersion 单一来源, 别在这里写死)</summary>
-    public string VersionNumber => "v" + App.AppVersion;
+    public string VersionNumber => $"{App.TvVersion} · 上游 v{App.AppVersion}";
+    public ICommand EnterTvModeCommand { get; } = new RelayCommand(() => SvcWindow.Main?.EnterTvMode());
 
     // ----------------- 顶部 Tab(2026-10-03 重做) -----------------
 

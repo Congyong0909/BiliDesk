@@ -32,7 +32,8 @@ public partial class PlayerWindow : FluentWindow
     {
         // ★ 必须在最前面: 下面会把全屏态(WindowStyle/WindowState)还原成普通窗口,
         //   之后再读几何就变成了还原后的值, 记忆会失效。
-        SavePlayerWindowPlacement();
+        if (IsTvPresentation) _windowPlacementSaved = true;
+        else SavePlayerWindowPlacement();
 
         // 为什么要"先隐藏 -> 后台拆解 -> 再真正 Close":
         // LibVLC 的 Stop/Dispose 会阻塞等待解复用/解码线程退出(实测约 1 秒),
@@ -120,6 +121,7 @@ public partial class PlayerWindow : FluentWindow
                 ProgressSlider.ReleaseMouseCapture();
 
             // 先把覆盖层摘掉再隐藏窗口, 否则底部控制栏会以残影形式留在屏幕上
+            EndTvPresentation(restoreDesktop: false);
             DetachVideoOverlay();
 
             // 从全屏态直接关闭时, 先摘掉"无边框 + 最大化"这个组合。

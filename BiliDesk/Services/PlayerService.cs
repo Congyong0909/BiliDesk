@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using BiliDesk.Views;
+using BiliDesk.Models;
 
 namespace BiliDesk.Services;
 
@@ -63,6 +64,22 @@ public class PlayerService
     public void PlayVideo(string bvid, string? title = null, BiliDesk.Models.BangumiPlaylist? bangumi = null)
         => Play(title, win => win.PlayVideo(bvid, bangumi));
 
+    internal bool PlayTvVideo(VideoItem video, Window owner, Action onReturn)
+    {
+        var win = GetOrCreateWindow();
+        if (win == null) return false;
+        win.BeginTvPresentation(owner);
+        void Return(object sender, DependencyPropertyChangedEventArgs args)
+        {
+            if (win.IsVisible || !win.IsClosing) return;
+            win.IsVisibleChanged -= Return;
+            onReturn();
+        }
+        win.IsVisibleChanged += Return;
+        Start(win, video.Title, player => player.PlayVideo(video.Bvid));
+        return true;
+    }
+
     /// <summary>
     /// 打开直播间(首页「直播」tab 用)。复用同一个播放器窗口, 走"直播"分支:
     /// 不查视频详情、不加载弹幕、不查三连状态、不上报历史进度。
@@ -118,7 +135,12 @@ public class PlayerService
     {
         var win = GetOrCreateWindow();
         if (win == null) return;
+        win.EndTvPresentation(restoreDesktop: true);
+        Start(win, title, start);
+    }
 
+    private void Start(PlayerWindow win, string? title, Action<PlayerWindow> start)
+    {
         start(win);
         if (!string.IsNullOrEmpty(title)) win.Title = title + " - BiliDesk";
         // 新窗口/换片后立即广播一次: 主窗口的入口不必等 Playing 事件才出现,

@@ -47,6 +47,15 @@
     <!-- ==================== 通用 ==================== -->
     <DataTemplate x:Key="GeneralTabTemplate">
         <StackPanel>
+            <ContentControl ContentTemplate="{StaticResource SectionHeaderTemplate}" Content="电视模式" />
+            <Border Style="{StaticResource SettingsCardStyle}">
+                <DockPanel Margin="16,12" LastChildFill="True">
+                    <Button DockPanel.Dock="Right" Content="进入电视模式" Style="{StaticResource SubtleButtonStyle}"
+                            Command="{Binding EnterTvModeCommand}" />
+                    <TextBlock Text="在当前屏幕全屏浏览，用方向键、确认和返回操作。"
+                               Style="{StaticResource SettingsRowDescStyle}" VerticalAlignment="Center" />
+                </DockPanel>
+            </Border>
 
             <!-- ============ 首页推荐 ============
                  2026-11 恢复「网页版 / App 端」二选一(2026-10-03 曾因 App 端接口
@@ -1289,45 +1298,14 @@
             </Border>
 
             <ContentControl ContentTemplate="{StaticResource SectionHeaderTemplate}"
-                            Content="更新" />
+                            Content="电视版版本" />
 
             <Border Style="{StaticResource SettingsCardStyle}">
                 <StackPanel>
                     <Grid Style="{StaticResource SettingsRowStyle}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
-                            <TextBlock Text="自动检查更新" Style="{StaticResource SettingsRowTitleStyle}" />
-                            <TextBlock Text="{Binding AutoCheckUpdateHint}"
-                                       Style="{StaticResource SettingsRowDescStyle}" />
-                        </StackPanel>
-                        <CheckBox Grid.Column="1" Style="{StaticResource SettingsToggleStyle}"
-                                  VerticalAlignment="Center"
-                                  IsChecked="{Binding AutoCheckUpdate, Mode=TwoWay}" />
-                    </Grid>
-                    <Border Style="{StaticResource SettingsRowDivider}" />
-                    <Grid Style="{StaticResource SettingsRowStyle}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
-                            <TextBlock Text="检查更新" Style="{StaticResource SettingsRowTitleStyle}" />
-                            <TextBlock Text="{Binding UpdateStatusText}"
-                                       Style="{StaticResource SettingsRowDescStyle}"
-                                       Visibility="{Binding UpdateStatusText, Converter={StaticResource StrToVis}}" />
-                        </StackPanel>
-                        <Button Grid.Column="1" Content="检查更新" Style="{StaticResource SubtleButtonStyle}"
-                                VerticalAlignment="Center"
-                                Command="{Binding CheckUpdateCommand}" />
-                    </Grid>
-                    <Border Style="{StaticResource SettingsRowDivider}" />
-                    <Grid Style="{StaticResource SettingsRowStyle}">
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="版本号" Style="{StaticResource SettingsRowTitleStyle}" />
-                            <TextBlock Text="当前使用中的程序版本"
+                            <TextBlock Text="电视版通过独立便携包更新。"
                                        Style="{StaticResource SettingsRowDescStyle}" />
                         </StackPanel>
                         <TextBlock Text="{Binding VersionNumber}" FontSize="13"

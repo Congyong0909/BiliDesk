@@ -279,6 +279,7 @@ public class SettingsStore
 
     /// <summary>启动后自动检查更新(默认开; 关掉后仍可在设置页手动检查)</summary>
     public bool AutoCheckUpdate { get; set; } = true;
+    public string? TvMonitor { get; private set; }
 
     /// <summary>用户点过「跳过此版本」的版本号(空 = 没跳过; 只影响自动检查, 见 UpdateChecker.AutoCheckAsync)</summary>
     public string SkippedVersion { get; set; } = "";
@@ -895,6 +896,7 @@ public class SettingsStore
         CloseToTray = s.CloseToTray;
         OpenLinksInExternalBrowser = s.OpenLinksInExternalBrowser;
         AutoCheckUpdate = s.AutoCheckUpdate;
+        TvMonitor = s.TvMonitor;
         SkippedVersion = s.SkippedVersion ?? "";
         // 失败提示的节流时间: 未来时间只可能来自改系统时钟/手改配置 ——
         // 留着会让失败提示永久不再出现, 一律归 null(与 UpdateFailurePolicy 的兜底一致)。
@@ -1180,6 +1182,7 @@ public class SettingsStore
         CloseToTray = CloseToTray,
         OpenLinksInExternalBrowser = OpenLinksInExternalBrowser,
         AutoCheckUpdate = AutoCheckUpdate,
+        TvMonitor = TvMonitor,
         SkippedVersion = SkippedVersion,
         LastUpdateFailureNoticeUtc = LastUpdateFailureNoticeUtc,
         NoLogin1080P = NoLogin1080P,
@@ -1488,6 +1491,13 @@ public class SettingsStore
     }
 
     /// <summary>改"自动检查更新"并落盘</summary>
+    internal void SetTvMonitor(string value)
+    {
+        if (TvMonitor == value) return;
+        TvMonitor = value;
+        Save();
+    }
+
     public void SetAutoCheckUpdate(bool value)
     {
         if (AutoCheckUpdate == value) return;

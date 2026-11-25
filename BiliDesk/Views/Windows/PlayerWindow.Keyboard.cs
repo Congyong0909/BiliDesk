@@ -42,6 +42,7 @@ public partial class PlayerWindow : FluentWindow
         //   ⇒ 带 Ctrl / Alt 的组合键**一律放行**给系统与文本控件(Ctrl+C/V/A/X/Z 全部恢复);
         //   裸 C 仍然开关字幕, Shift 组合(方向键 30s 快进)不受影响。
         if ((Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) != 0) return;
+        if (HandleTvInput(e)) { e.Handled = true; return; }
         switch (e.Key)
         {
             // ★ 直播的暂停只留控制栏那颗按钮(2026-11-20, issue #98): 空格/点画面太容易误触,
@@ -204,6 +205,7 @@ public partial class PlayerWindow : FluentWindow
     /// <summary>→ 键松开: 若是键盘长按触发的 3x, 恢复按下前的速率。</summary>
     private void OnPreviewKeyUp(object sender, KeyEventArgs e)
     {
+        if (IsTvPresentation && e.Key == Key.Right) { e.Handled = true; return; }
         // ★ 必须与 OnPreviewKeyDown 用同一条输入框判据: 焦点在可编辑 TextBox 里时,
         //   KeyDown 被放行(不启计时器), 而 KeyUp 若照常走到 "短按 → 跳 5 秒",
         //   就会变成"在弹幕/评论输入框里按 → 视频往前跳" —— 按住方向键移光标更是一路狂跳。

@@ -447,6 +447,7 @@ public class AppSettings
     /// 老配置缺这个字段时保持初始化值 ⇒ "默认打开"自动成立, 不需要版本号兼容。
     /// </summary>
     public bool AutoCheckUpdate { get; set; } = true;
+    public string? TvMonitor { get; set; }
 
     /// <summary>
     /// 用户点过「跳过此版本」的版本号(如 "1.2.0")。空 = 没跳过任何版本。

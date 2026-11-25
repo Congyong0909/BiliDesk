@@ -19,6 +19,8 @@ public partial class App : Application
     ///   BiliDesk.csproj 的 &lt;Version&gt;、Publish\installer.iss 的 MyAppVersion、发布.ps1 的默认 $Version。
     /// </summary>
     public const string AppVersion = "1.8.6";
+    internal const string TvVersion = "1.8.6-tv.1";
+    internal const string TvProductName = "BiliDeskTV";
 
     public static MainViewModel MainVm { get; } = new();
 
@@ -97,7 +99,8 @@ public partial class App : Application
         //   再 Save 回去就会覆盖第一个进程刚写的状态(登录态/设置互相打架), 还会多占一份
         //   LibVLC 原生库。所以"不是第一个"时要把整个启动流程掐掉。
         //   把已在跑的实例叫到前台这件事由 SingleInstance 自己通过管道转达(见该文件)。
-        if (!SingleInstance.Acquire())
+        bool startTv = Array.Exists(e.Args, arg => string.Equals(arg, "--tv", StringComparison.OrdinalIgnoreCase));
+        if (!SingleInstance.Acquire(startTv))
         {
             // 不建任何窗口, 直接退出。用 Shutdown() 而不是 Environment.Exit():
             // 这时还没有窗口/托盘资源, 但走 WPF 的正规退出路径更稳。
@@ -165,6 +168,7 @@ public partial class App : Application
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
             var disclaimer = new Views.Windows.DisclaimerWindow();
+            if (startTv) disclaimer.EnableRemoteNavigation();
             disclaimer.ShowDialog();
             if (!disclaimer.Agreed)
             {
@@ -181,7 +185,8 @@ public partial class App : Application
         // (声明窗口已经占过一次 MainWindow 的位置, 这里不重新指认的话关掉主窗口不会退出程序)
         MainWindow = main;
         ShutdownMode = ShutdownMode.OnMainWindowClose;
-        main.Show();
+        if (startTv) main.EnterTvMode(useRememberedMonitor: true);
+        else main.Show();
 
         // 系统托盘: 双击回主界面, 右键可退出(失败只记日志, 不影响启动)
         TrayService.Instance.Initialize();
@@ -210,9 +215,15 @@ public partial class App : Application
         // ★ 用户**又双击了一次 exe**: 已经在跑的这个实例收到管道通知, 把主窗口叫到前台。
         //   只挡"不双开"而不做这件事, 用户看到的是"双击图标毫无反应", 会以为程序坏了。
         //   ShowRequested 在后台线程触发, 这里派发回 UI 线程再碰窗口。
-        SingleInstance.ShowRequested += () =>
+        SingleInstance.ShowRequested += openTv =>
             Dispatcher.BeginInvoke(new Action(() =>
             {
+                if (openTv)
+                {
+                    main.EnterTvMode(useRememberedMonitor: true);
+                    return;
+                }
+                if (main.ShowTvMode()) return;
                 // 复用托盘那套"显示主窗口"的逻辑(它已经处理了最小化还原 + Show + Activate)
                 TrayService.Instance.ShowMainWindow();
                 // 顺带把主窗口置顶闪一下: 只 Activate 有时会被其它前台窗口压住
@@ -228,14 +239,6 @@ public partial class App : Application
                 }
             }));
 
-        // 自动检查更新: 主界面起来后等 6 秒再查(避开启动高峰, 也别让"检查"和首屏加载抢网络)。
-        // 查询本身是匿名请求; 失败会按原因弹出节流提示(24h 最多一次, 完全断网静默),
-        // 细节见 UpdateChecker.AutoCheckAsync / NotifyFailureAsync。
-        _ = System.Threading.Tasks.Task.Run(async () =>
-        {
-            await System.Threading.Tasks.Task.Delay(6000);
-            await UpdateChecker.AutoCheckAsync();
-        });
     }
 
     /// <summary>

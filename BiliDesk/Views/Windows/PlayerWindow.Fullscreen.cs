@@ -27,12 +27,12 @@ namespace BiliDesk.Views;
 
 public partial class PlayerWindow : FluentWindow
 {
-    private void ToggleFullscreen()
+    private void ToggleFullscreen(bool persistPlacement = true)
     {
         if (_closing) return;
 
         // 进全屏前把常规几何落盘: 进全屏后 Width/Height 会变成全屏尺寸, 读不到可信值了。
-        if (!_isFullscreen)
+        if (!_isFullscreen && persistPlacement)
         {
             CaptureNormalPlacement();
             PersistNormalPlacement();

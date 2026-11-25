@@ -15,12 +15,41 @@ using BiliDesk.Services;
 using BiliDesk.ViewModels;
 using BiliDesk.Views;
 using BiliDesk.Views.Pages;
+using BiliDesk.Views.TV;
 
 namespace BiliDesk;
 
 public partial class MainWindow : FluentWindow
 {
     private readonly MainViewModel _vm = App.MainVm;
+    private TvWindow? _tv;
+
+    internal void EnterTvMode(bool useRememberedMonitor = false)
+    {
+        if (ShowTvMode()) return;
+        var screen = TvDisplay.Choose(this, useRememberedMonitor ? Svc.Settings.TvMonitor : null);
+        Svc.Settings.SetTvMonitor(screen.DeviceName);
+        var tv = new TvWindow(screen);
+        _tv = tv;
+        tv.Closed += (_, _) =>
+        {
+            _tv = null;
+            if (App.IsExiting) return;
+            Show();
+            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+            Activate();
+        };
+        tv.ShowOn(screen);
+        if (IsVisible) Hide();
+    }
+
+    internal bool ShowTvMode()
+    {
+        if (_tv == null) return false;
+        if (_tv.ActivePlayer) Svc.Player.ActivateCurrent();
+        else _tv.Activate();
+        return true;
+    }
 
     /// <summary>
     /// 已建好的页面实例(切换时保留状态)。

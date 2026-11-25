@@ -6,7 +6,7 @@
              xmlns:vm="clr-namespace:BiliDesk.ViewModels"
              xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
              xmlns:helpers="clr-namespace:BiliDesk.Helpers"
-             Title="BiliDesk" Width="1280" Height="800"
+             Title="BiliDesk TV · 桌面模式" Width="1280" Height="800"
              MinWidth="840" MinHeight="660" WindowStartupLocation="CenterScreen"
              WindowStyle="None" ResizeMode="CanResize" UseLayoutRounding="True">
     <!--

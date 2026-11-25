@@ -95,7 +95,7 @@ public static class AppPaths
     public static void Init()
     {
         DataDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BiliDesk");
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), App.TvProductName);
         // 先落到默认值: 配置还没读(SettingsStore.Load 在后面), 这段时间内任何缓存路径
         // 都必须是个可用路径 —— 不能是空串, 否则 Path.Combine("", "imgcache") 会得到相对路径,
         // 缓存就落到进程当前目录(启动方式不同还会换地方)。

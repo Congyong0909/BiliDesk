@@ -29,10 +29,10 @@ namespace BiliDesk.Services;
 public static class SingleInstance
 {
     /// <summary>互斥体专名。带产品名 + 版本无关, 避免和别的程序撞</summary>
-    private const string MutexName = @"Local\BiliDesk.SingleInstance.Mutex";
+    private const string MutexName = @"Local\" + App.TvProductName + ".SingleInstance.Mutex";
 
     /// <summary>管道的名字(第二个实例通过它发"请显形"指令)</summary>
-    private const string PipeName = "BiliDesk.SingleInstance.Pipe";
+    private const string PipeName = App.TvProductName + ".SingleInstance.Pipe";
 
     /// <summary>
     /// 持有 Mutex 的引用。**必须是静态字段** —— 局部变量会被 GC 回收, 那样锁就释放了。
@@ -43,14 +43,14 @@ public static class SingleInstance
     public static bool IsFirstInstance { get; private set; }
 
     /// <summary>收到"再来一个实例"的请求时触发(在后台线程上, 订阅方自己 Dispatcher 派发)</summary>
-    public static event Action? ShowRequested;
+    public static event Action<bool>? ShowRequested;
 
     /// <summary>
     /// 尝试成为唯一实例。
     /// 返回 true = 本进程是第一个(调用方继续正常启动);
     /// 返回 false = 已经有实例在跑(调用方**必须立刻退出**, 不要建窗口)。
     /// </summary>
-    public static bool Acquire()
+    public static bool Acquire(bool openTv = false)
     {
         try
         {
@@ -65,7 +65,7 @@ public static class SingleInstance
 
             // 不是第一个: 把"请显形"发给已经在跑的那个, 然后本进程退出。
             // 这一步失败也不影响"不双开"这个核心目标, 所以吞掉异常。
-            TrySignalExisting();
+            TrySignalExisting(openTv);
             try { _mutex.Dispose(); } catch { }
             _mutex = null;
             return false;
@@ -102,8 +102,10 @@ public static class SingleInstance
                         PipeName, PipeDirection.In, 1,
                         PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
                     await server.WaitForConnectionAsync().ConfigureAwait(false);
-                    // 内容不重要: 管道里只要来了连接, 就是"请把你的窗口显示出来"
-                    ShowRequested?.Invoke();
+                    var request = new byte[1];
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+                    int read = await server.ReadAsync(request.AsMemory(), timeout.Token).ConfigureAwait(false);
+                    ShowRequested?.Invoke(read == 1 && request[0] == 2);
                 }
                 catch
                 {
@@ -115,14 +117,14 @@ public static class SingleInstance
     }
 
     /// <summary>把"请显形"发给已在运行的实例(超时很短: 对方没在听就直接放弃)</summary>
-    private static void TrySignalExisting()
+    private static void TrySignalExisting(bool openTv)
     {
         try
         {
             using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
             // 1 秒: 正常情况是毫秒级。对方没在监听(例如正卡在启动)时不要拖着不退出。
             client.Connect(1000);
-            client.WriteByte(1);
+            client.WriteByte(openTv ? (byte)2 : (byte)1);
             client.Flush();
         }
         catch

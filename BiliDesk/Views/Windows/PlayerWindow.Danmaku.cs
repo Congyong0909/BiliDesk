@@ -296,6 +296,7 @@ public partial class PlayerWindow : FluentWindow
     /// </summary>
     private void OnVideoAreaMouseLeftDown(object sender, MouseButtonEventArgs e)
     {
+        if (IsTvPresentation) return;
         // 落在窗口边缘缩放带里的按下是"拖边缘改大小", 不算视频区手势(见 TryBeginEdgeResize)
         if (TryBeginEdgeResize()) { e.Handled = true; return; }
         if (_mp == null) return;
@@ -436,6 +437,7 @@ public partial class PlayerWindow : FluentWindow
     /// </summary>
     private void OnVideoAreaMouseRightDown(object sender, MouseButtonEventArgs e)
     {
+        if (IsTvPresentation) return;
         // ★ 落在窗口边缘缩放带里就**不要**当成视频区手势, 但**也不能**调 TryBeginEdgeResize():
         //   它内部发的是 `WM_NCLBUTTONDOWN`(**左键**消息), 用右键去调等于"假装用户按了左键拖边框",
         //   会让系统进入模态缩放循环 —— 而那个循环等的是左键松开, 右键根本不会给它。
@@ -521,6 +523,7 @@ public partial class PlayerWindow : FluentWindow
     /// </summary>
     private void OnVideoAreaMouseMove(object sender, MouseEventArgs e)
     {
+        if (IsTvPresentation) return;
         if (_controlsHidden) ShowControls();
         if (ShouldHideControls()) StartControlsHideCountdown();
         else _controlsHideTimer?.Stop();
@@ -531,7 +534,7 @@ public partial class PlayerWindow : FluentWindow
     /// <summary>现在是否处于"应该隐藏控制栏"的状态: 只在**播放中**自动隐藏。</summary>
     private bool ShouldHideControls()
     {
-        if (_closing || _mp == null || !_mp.IsPlaying) return false;
+        if (IsTvPresentation || _closing || _mp == null || !_mp.IsPlaying) return false;
         if (QualityPopup != null && QualityPopup.IsOpen) return false;
         if (DanmakuAreaPopup != null && DanmakuAreaPopup.IsOpen) return false;
         if (SpeedPopup != null && SpeedPopup.IsOpen) return false;

@@ -847,7 +847,7 @@ public class FavoritesViewModel : VideoListSelectionViewModel, IPagedViewModel
     }
 
     /// <summary>翻到指定页。失败时把页码高亮回滚, 不会停在错误的高亮上。</summary>
-    private async Task GoToPageAsync(int page)
+    internal async Task GoToPageAsync(int page)
     {
         if (IsPaging || Busy) return;
         if (page < 1) return;

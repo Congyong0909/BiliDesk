@@ -36,7 +36,7 @@ public class TrayService : IDisposable
 
             _icon = new System.Windows.Forms.NotifyIcon
             {
-                Text = "BiliDesk",
+                Text = "BiliDesk TV",
                 Visible = true,
                 Icon = LoadAppIcon()
             };
@@ -118,7 +118,7 @@ public class TrayService : IDisposable
         {
             // SvcWindow.Main 是我们显式登记的主窗口, 比 Application.MainWindow 可靠
             // (后者可能还指着早已关闭的免责声明窗口)
-            if (SvcWindow.Main is not Window win) return;
+            if (SvcWindow.Main is not { } win || win.ShowTvMode()) return;
             if (win.WindowState == WindowState.Minimized)
                 win.WindowState = WindowState.Normal;
             win.Show();
