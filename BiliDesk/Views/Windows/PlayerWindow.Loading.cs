@@ -966,6 +966,7 @@ public partial class PlayerWindow : FluentWindow
         //   重则目标超过新视频长度, seek 直接落到流尾触发假 EOF("一打开就提示已播完")。
         _resumeAfterSwitchMs = 0;
         _resumeByStartTime = false;
+        _restoreTvQualityPosition = false;
         _eofSeekRebuildTried = false;
         _eofFallbackToStartTried = false;
         _progressDragStartValue = 0;
@@ -1168,7 +1169,7 @@ public partial class PlayerWindow : FluentWindow
         nameof(_seekObservedMs), nameof(_seekElsewhereSeenMs), nameof(_seekFromMs),
         nameof(_seekGraceUntil), nameof(_seekMuteSavedVolume), nameof(_isSeeking),
         nameof(_seekRebuildTried), nameof(_seekBounceSeenMs), nameof(_seekBounceAt),
-        nameof(_seekIssuedAt), nameof(_lastSeekTargetMs), nameof(_resumeByStartTime),
+        nameof(_seekIssuedAt), nameof(_lastSeekTargetMs), nameof(_resumeByStartTime), nameof(_restoreTvQualityPosition),
         nameof(_eofSeekRebuildTried), nameof(_progressDragStartValue),
         // ":start-time 定位没生效"的补救预算(2026-11-20): 属于"这一次重建"的态,
         // 换片必须复位, 否则下一条视频会少给一次兜底机会。

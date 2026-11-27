@@ -16,6 +16,7 @@ public partial class PlayerWindow
     private bool TvDolbyEnabled => IsTvPresentation && Svc.Settings.TvDolbyVision;
     private DispatcherTimer? _tvDolbyStartup;
     private TvDolbyFallback? _tvDolbyFallback;
+    private bool _restoreTvQualityPosition;
 
     private sealed record TvDolbyFallback(int Epoch, int Quality, long Position, string Url,
         string? AudioUrl, string? ListenAudioUrl, string[] Backups);
@@ -93,6 +94,7 @@ public partial class PlayerWindow
         RememberPlayUrlFreshness(fallback.Url, fallback.Backups);
         _resumeAfterSwitchMs = fallback.Position;
         _resumeByStartTime = false;
+        _restoreTvQualityPosition = true;
         FillQualityMenu(fallback.Quality);
         _tvPlayback?.UpdateLabel(1, TvQualityLabel);
         ShowLoading("正在恢复上一个画质…");

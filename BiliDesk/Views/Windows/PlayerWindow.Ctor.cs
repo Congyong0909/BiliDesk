@@ -257,8 +257,10 @@ public partial class PlayerWindow : FluentWindow
             //   用户看到的就是"打开长视频直接已播完""拖动进度条又已播完"。
             var resumeTarget = _resumeAfterSwitchMs;
             var resumeByStartTime = _resumeByStartTime;
+            var restoreTvQualityPosition = _restoreTvQualityPosition;
             _resumeAfterSwitchMs = 0;
             _resumeByStartTime = false;
+            _restoreTvQualityPosition = false;
             var effectiveLength = 0L;
             try { effectiveLength = _mp.Length; } catch { /* 原生对象可能已失效 */ }
             if (effectiveLength <= 0) effectiveLength = _totalMs;
@@ -270,7 +272,8 @@ public partial class PlayerWindow : FluentWindow
                 WriteLibVLCDebug($"[Resume] 时长未知, 跳过续播 pos={resumeTarget}ms\n");
                 resumeTarget = 0;
             }
-            else if (resumeTarget > 0 && !ResumePolicy.IsResumable(resumeTarget, effectiveLength))
+            // 电视画质切换恢复同一次播放的位置，包括片头不足 5 秒的进度。
+            else if (resumeTarget > 0 && !restoreTvQualityPosition && !ResumePolicy.IsResumable(resumeTarget, effectiveLength))
             {
                 // 已经到片尾/越界: 当作看完, 从头播。绝不 seek 进尾部 —— 那正是假 EOF 的来源。
                 WriteLibVLCDebug(

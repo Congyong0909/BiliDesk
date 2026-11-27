@@ -1221,8 +1221,9 @@ public partial class PlayerWindow : FluentWindow
             FillQualityMenu(actualQn > 0 ? actualQn : qn);
 
             // 起播后(Playing 事件)自动恢复到切换前进度
-            _resumeAfterSwitchMs = resumeMs > 2000 ? resumeMs : 0;
+            _resumeAfterSwitchMs = selectDolby || resumeMs > 2000 ? resumeMs : 0;
             _resumeByStartTime = false;   // 换清晰度走"起播后设 Time", 不是 start-time
+            _restoreTvQualityPosition = selectDolby;
             // 新流重新计时"提前结束自救"
             _eofResumeCount = 0;
             _lastEofResumeMs = 0;
