@@ -448,6 +448,8 @@ public class AppSettings
     /// </summary>
     public bool AutoCheckUpdate { get; set; } = true;
     public string? TvMonitor { get; set; }
+    public TvThemeMode TvTheme { get; set; }
+    public bool TvDolbyVision { get; set; }
 
     /// <summary>
     /// 用户点过「跳过此版本」的版本号(如 "1.2.0")。空 = 没跳过任何版本。

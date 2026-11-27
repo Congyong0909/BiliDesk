@@ -15,6 +15,19 @@ namespace BiliDesk.Helpers;
 /// </summary>
 public static class QualityMenuPolicy
 {
+    internal const int DolbyVision = 126;
+    internal const string DolbyVisionLabel = "杜比视界（实验性）";
+
+    internal static bool IsMenuTier(int qn, bool allowDolbyVision) => qn > 0 &&
+        (!QualityPreference.IsUnsupportedTier(qn) || (allowDolbyVision && qn == DolbyVision));
+
+    internal static bool CanSelectTvDashTier(int id, int requestedQn, bool allowDolbyVision) =>
+        requestedQn == DolbyVision ? allowDolbyVision && id == DolbyVision
+            : id <= QualityPreference.HighestQn && IsMenuTier(id, false);
+
+    internal static string DashFlags(bool highQualityAudio, bool allowDolbyVision) =>
+        highQualityAudio || allowDolbyVision ? "4048" : "16";
+
     /// <summary>
     /// 合并两份清晰度列表: 按 qn 去重, 保留旧档位, 补入新档位, 从高到低排序。
     ///
@@ -25,13 +38,14 @@ public static class QualityMenuPolicy
     /// </summary>
     public static List<(int qn, string label)> Merge(
         IReadOnlyList<(int qn, string label)> current,
-        IReadOnlyList<(int qn, string label)> incoming)
+        IReadOnlyList<(int qn, string label)> incoming,
+        bool allowDolbyVision = false)
     {
         var byQn = new Dictionary<int, string>();
         foreach (var (qn, label) in current)
-            Add(byQn, qn, label);
+            Add(byQn, qn, label, allowDolbyVision);
         foreach (var (qn, label) in incoming)
-            Add(byQn, qn, label);
+            Add(byQn, qn, label, allowDolbyVision);
 
         var merged = new List<(int qn, string label)>(byQn.Count);
         foreach (var (qn, label) in byQn)
@@ -40,9 +54,9 @@ public static class QualityMenuPolicy
         return merged;
     }
 
-    private static void Add(Dictionary<int, string> byQn, int qn, string label)
+    private static void Add(Dictionary<int, string> byQn, int qn, string label, bool allowDolbyVision)
     {
-        if (qn <= 0 || QualityPreference.IsUnsupportedTier(qn)) return;
-        byQn[qn] = label;
+        if (IsMenuTier(qn, allowDolbyVision))
+            byQn[qn] = qn == DolbyVision ? DolbyVisionLabel : label;
     }
 }

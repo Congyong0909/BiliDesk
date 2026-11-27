@@ -183,10 +183,10 @@ public partial class PlayerWindow : FluentWindow
         try
         {
             var (ok, err, main, backups, _, _, _, audioUrl, _, _, _, _, _) =
-                await Svc.Api.GetPlayUrlAsync(bvid, cid, qn, Svc.Settings.PreferredAudioTier);
+                await Svc.Api.GetPlayUrlAsync(bvid, cid, qn, Svc.Settings.PreferredAudioTier, tvPlayback: IsTvPresentation);
 
             // 期间换了片/换了分P: 结果是上一条的, 丢掉
-            if (_closing || gen != _loadGen || _currentCid != cid) return;
+            if (_closing || gen != _loadGen || _currentCid != cid || qn != _currentQn) return;
             if (!ok || string.IsNullOrEmpty(main))
             {
                 WriteLibVLCDebug($"[UrlFresh] 重取地址失败: {err}\n");

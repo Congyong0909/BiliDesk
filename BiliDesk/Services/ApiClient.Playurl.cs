@@ -437,9 +437,14 @@ public partial class ApiClient
         List<(int qn, string label)> qualities, int actualQn, string? audioUrl, DashStreams? remux,
         long lastPlayMs, long lastPlayCid, List<int> audioIds, int actualAudioId)>
         GetPlayUrlAsync(string bvid, long cid, int qn = 80, AudioTier? audioTier = null,
-            bool needFullQualityMenu = false)
+            bool needFullQualityMenu = false, bool tvPlayback = false)
     {
         var qualities = new List<(int qn, string label)>();
+        bool allowDolbyVision = tvPlayback && Svc.Settings.TvDolbyVision;
+        bool requestDolbyVision = tvPlayback && qn == QualityMenuPolicy.DolbyVision;
+        const string dolbyUnavailable = "当前视频或账号暂时无法获取杜比视界视频流。";
+        if (requestDolbyVision && !allowDolbyVision)
+            return (false, dolbyUnavailable, null, new(), 0, qualities, 0, null, null, 0, 0, new(), 0);
         try
         {
             await EnsureBuvidAsync();
@@ -449,6 +454,7 @@ public partial class ApiClient
             //   清晰度目录请求的 fnval(保持与主 DASH 取流完全一致)。
             var wantHighQualityStreams = Svc.Settings.PreferHighQualityAudio ||
                 (audioTier != null && AudioPreference.Normalize(audioTier ?? AudioTier.Auto) != AudioTier.Auto);
+            var dashFlags = QualityMenuPolicy.DashFlags(wantHighQualityStreams, allowDolbyVision);
 
             // ★★★ 2026-10-17 播放器手术第 1 步: durl 合流单流**按需**优先(仅 ≤720P)。
             //
@@ -480,7 +486,7 @@ public partial class ApiClient
                 //   起播延迟取两者较慢的那个, 而不是两次请求相加。失败返回空表, 下面回退
                 //   到 durl 自己的 accept_quality, 绝不影响能不能播。
                 var catalogTask = needFullQualityMenu
-                    ? FetchDashQualityCatalogAsync(bvid, cid, wantHighQualityStreams)
+                    ? FetchDashQualityCatalogAsync(bvid, cid, dashFlags, allowDolbyVision)
                     : null;
 
                 var (mUrl, mBackups, mQn, mQualities, durMux, lastPlayMsMux, lastPlayCidMux) =
@@ -494,7 +500,8 @@ public partial class ApiClient
                 if (!string.IsNullOrEmpty(mUrl) && !durlHonored)
                     System.Diagnostics.Trace.WriteLine(
                         $"[Muxed] qn={qn} 被服务端降级到 {mQn}, 改走 DASH 保证清晰度");
-                if (!string.IsNullOrEmpty(mUrl) && durlHonored)
+                if (!string.IsNullOrEmpty(mUrl) && durlHonored &&
+                    (!tvPlayback || !QualityPreference.IsUnsupportedTier(mQn)))
                 {
                     // ★ 菜单优先级: DASH 目录 > durl 的 accept_quality。
                     //   durl 列表只到 720P, 用它会把 1080P/4K 从菜单里抹掉。
@@ -524,14 +531,13 @@ public partial class ApiClient
             // ---- DASH: 清晰度不受 html5 平台 720P 限制 ----
             // ★ 2026-11-06: fnval 从 16 改为 4048(全部 DASH 流), 否则拿不到
             //   dash.flac(30251 Hi-Res 无损) / dash.dolby(30250 杜比)。
-            //   关闭「优先高音质音轨」时仍用 16, 保持旧行为、避免改变视频流集合 ——
-            //   除非用户在播放器里明确指定了音质档位(那时必须带 4048, 否则选无损等于没选)。
+            //   高音质和电视模式的实验性杜比视界都需要扩展流目录；选音轨时再单独判断音质偏好。
             var ps = new Dictionary<string, string>
             {
                 ["bvid"] = bvid,
                 ["cid"] = cid.ToString(),
                 ["qn"] = qn.ToString(),
-                ["fnval"] = wantHighQualityStreams ? "4048" : "16",
+                ["fnval"] = dashFlags,
                 ["fnver"] = "0",
                 ["fourk"] = "1"
             };
@@ -571,15 +577,11 @@ public partial class ApiClient
                     foreach (var v in videos.EnumerateArray())
                     {
                         var id = GetInt(v, "id");
-                        if (id > 0 && seen.Add(id))
+                        if (id > 0 && (id != QualityMenuPolicy.DolbyVision || HasDashVideoSource(v)) && seen.Add(id))
                             qualities.Add((id, QnToLabel(id)));
                     }
                     qualities.Sort((a, b) => b.qn.CompareTo(a.qn));
-                    // ★ 菜单只列**能正常渲染**的档(2026-11-14): 杜比视界/HDR/8K 在这里挡掉。
-                    //   fnval=4048 是为了音轨(无损/杜比)才带上的, 它顺带把这三档视频流也
-                    //   放进了 dash.video; 但播放器渲染不了它们, 列出来只会让用户点了发现
-                    //   画面发灰/卡死。选流逻辑不受影响(见下面的兜底)。
-                    FilterPlayableQualities(qualities);
+                    FilterPlayableQualities(qualities, allowDolbyVision);
 
                     // 选流: 不超过请求 qn 的最高清晰度; **同档优先 HEVC**。
                     //
@@ -600,6 +602,8 @@ public partial class ApiClient
                         var id = GetInt(v, "id");
                         var codec = GetStr(v, "codecs");
                         if (id <= 0 || id > qn) continue;
+                        if (tvPlayback && !QualityMenuPolicy.CanSelectTvDashTier(id, qn, allowDolbyVision)) continue;
+                        if (requestDolbyVision && !HasDashVideoSource(v)) continue;
                         var rank = CodecRank(codec);
                         if (bestId == 0 || id > bestId || (id == bestId && rank > bestRank))
                         {
@@ -612,13 +616,14 @@ public partial class ApiClient
                     //   会挑中 126。而这条路径的触发条件恰恰是"qn 太低/该档没源", 用户此时
                     //   最不想要的就是一条渲染不了的高档流。所以先只在"常规档"里挑,
                     //   整条视频真的只有 DV/HDR/8K 时才退回原来的最高档(宁可播也别什么都不播)。
-                    if (bestId == 0 && videos.GetArrayLength() > 0)
+                    if (bestId == 0 && !requestDolbyVision && videos.GetArrayLength() > 0)
                     {
                         var foundRegular = false;
                         foreach (var v in videos.EnumerateArray())
                         {
                             var id = GetInt(v, "id");
                             if (id <= 0 || QualityPreference.IsUnsupportedTier(id)) continue;
+                            if (tvPlayback && !QualityMenuPolicy.CanSelectTvDashTier(id, qn, allowDolbyVision)) continue;
                             var rank = CodecRank(GetStr(v, "codecs"));
                             if (!foundRegular || id > bestId || (id == bestId && rank > bestRank))
                             {
@@ -626,7 +631,7 @@ public partial class ApiClient
                                 foundRegular = true;
                             }
                         }
-                        if (!foundRegular)
+                        if (!foundRegular && !tvPlayback)
                         {
                             foreach (var v in videos.EnumerateArray())
                             {
@@ -753,7 +758,7 @@ public partial class ApiClient
                     // 注意这里**不改播放地址**: 起播仍然用远端 DASH(零等待), 合流是后台在做,
                     // 就绪后播放器再切过去。见 ShortVideoRemuxThresholdMs 的说明。
                     DashStreams? remux = null;
-                    if (dur > 0 && dur <= ShortVideoRemuxThresholdMs &&
+                    if (!requestDolbyVision && dur > 0 && dur <= ShortVideoRemuxThresholdMs &&
                         !string.IsNullOrEmpty(audioUrl) && chosen != null && chosenAudio != null)
                     {
                         var v = chosen.Value;
@@ -776,12 +781,15 @@ public partial class ApiClient
                 }
             }
 
+            if (requestDolbyVision)
+                return (false, dolbyUnavailable, null, new(), 0, qualities, 0, null, null, 0, 0, new(), 0);
+
             // ---- 2. 回退 durl 单流 ----
             // 手术前 durl 只在这条"兜底"路径上被用到; 现在它同时也是 ≤720P 的**主路**。
             // 这里仍然保留兜底: DASH 取不到(付费/大会员/该档无源)时, 单流往往还能救回来。
             var (mUrl2, mBackups2, mQn2, mQualities2, dur2, lastPlayMs2, lastPlayCid2) =
                 await FetchMuxedAsync(bvid, cid, qn);
-            if (mUrl2 == null)
+            if (mUrl2 == null || (tvPlayback && QualityPreference.IsUnsupportedTier(mQn2)))
                 return (false, "DASH 与 durl 都没能取到可播放的地址(可能是大会员/付费专属, 或该清晰度无源)",
                     null, new List<string>(), 0, qualities, 0, null, null, 0, 0,
                     new List<int>(), 0);
@@ -885,16 +893,21 @@ public partial class ApiClient
     ///   会出现"菜单里没有、按钮上还写着杜比视界"的割裂。放在这里, 播放器的三条取流路径
     ///   (DASH / ≤720P 主路 durl / DASH 失败兜底 durl)一次覆盖, 切档后重新取流也自动生效。
     /// ★ 判据与"自动选流要跳过的档"同源, 见 <see cref="QualityPreference.IsUnsupportedTier"/>。
-    /// ★ 只动**可选范围**, 不动选流: 整条视频只有这些流时仍按原兜底挑一条播(宁可播也别黑屏)。
+    /// ★ 电视模式可选开放杜比视界，实际选流还要满足手动指定和 DASH 视频流存在。
     /// ★ 下载那条路(ApiClient.Download)刻意不走这里 —— 下载是存文件, 不经过播放器渲染,
     ///   8K/HDR/杜比视界照样可以下。
     /// </summary>
     private static List<(int qn, string label)> FilterPlayableQualities(
-        List<(int qn, string label)> qualities)
+        List<(int qn, string label)> qualities, bool allowDolbyVision = false)
     {
-        qualities.RemoveAll(x => QualityPreference.IsUnsupportedTier(x.qn));
+        qualities.RemoveAll(x => !QualityMenuPolicy.IsMenuTier(x.qn, allowDolbyVision));
         return qualities;
     }
+
+    private static bool HasDashVideoSource(JsonElement video) =>
+        !string.IsNullOrWhiteSpace(GetStr(video, "baseUrl")) ||
+        (video.TryGetProperty("backupUrl", out var backups) && backups.ValueKind == JsonValueKind.Array &&
+         backups.EnumerateArray().Any(url => url.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(url.GetString())));
 
     /// <summary>
     /// 只取 DASH 的**清晰度目录**(dash.video[].id), 供播放器清晰度菜单使用。
@@ -912,7 +925,7 @@ public partial class ApiClient
     ///   账号 / 免登录 1080P 能拿到的档位一次问全。失败返回空表, 调用方回退 durl 列表。
     /// </summary>
     private async Task<List<(int qn, string label)>> FetchDashQualityCatalogAsync(
-        string bvid, long cid, bool wantHighQualityStreams)
+        string bvid, long cid, string dashFlags, bool allowDolbyVision)
     {
         var catalog = new List<(int qn, string label)>();
         try
@@ -922,7 +935,7 @@ public partial class ApiClient
                 ["bvid"] = bvid,
                 ["cid"] = cid.ToString(),
                 ["qn"] = QualityPreference.HighestQn.ToString(),
-                ["fnval"] = wantHighQualityStreams ? "4048" : "16",
+                ["fnval"] = dashFlags,
                 ["fnver"] = "0",
                 ["fourk"] = "1"
             };
@@ -941,11 +954,11 @@ public partial class ApiClient
             foreach (var v in videos.EnumerateArray())
             {
                 var id = GetInt(v, "id");
-                if (id > 0 && seen.Add(id))
+                if (id > 0 && (id != QualityMenuPolicy.DolbyVision || HasDashVideoSource(v)) && seen.Add(id))
                     catalog.Add((id, QnToLabel(id)));
             }
             catalog.Sort((a, b) => b.qn.CompareTo(a.qn));
-            return FilterPlayableQualities(catalog);
+            return FilterPlayableQualities(catalog, allowDolbyVision);
         }
         catch
         {

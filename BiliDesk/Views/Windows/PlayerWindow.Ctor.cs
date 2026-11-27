@@ -237,6 +237,7 @@ public partial class PlayerWindow : FluentWindow
         _mp.Playing += (_, _) => Dispatcher.BeginInvoke(new Action<int>(epoch =>
         {
             if (_closing || epoch != _mediaEpoch) return;
+            if (_tvDolbyFallback?.Epoch == epoch) _tvDolbyStartup?.Stop();
             // 首帧耗时(从 PlayMedia 算起): 与 [Timing] 那行对齐, 用来验证起播优化有没有效果
             if (_playWatch != null)
             {
@@ -361,6 +362,7 @@ public partial class PlayerWindow : FluentWindow
         _mp.EncounteredError += (_, _) => Dispatcher.BeginInvoke(new Action<int>(epoch =>
         {
             if (_closing || epoch != _mediaEpoch) return;
+            if (TryRestoreTvDolby(epoch)) return;
             // 诊断: 把出错时正在播的 URL 也写进 debug 文件
             WriteLibVLCDebug(
                 $"\n[EncounteredError] bvid={_currentBvid} cid={_currentCid} lastUrl={_lastPlayUrl}\n");

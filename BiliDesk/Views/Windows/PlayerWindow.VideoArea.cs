@@ -415,6 +415,7 @@ public partial class PlayerWindow : FluentWindow
     /// </summary>
     private void OnOverlayActivated(object? sender, EventArgs e)
     {
+        _tvTheme?.Refresh();
         if (IsTvPresentation || _closing || _mp == null) return;
         // 直播: 点画面本来就不该切播放/暂停, 这套"补一次被吞掉的单击"对直播没有意义
         // (2026-11-20, issue #98 —— 只认控制栏按钮)。

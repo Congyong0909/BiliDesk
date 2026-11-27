@@ -19,7 +19,7 @@ public partial class App : Application
     ///   BiliDesk.csproj 的 &lt;Version&gt;、Publish\installer.iss 的 MyAppVersion、发布.ps1 的默认 $Version。
     /// </summary>
     public const string AppVersion = "1.8.6";
-    internal const string TvVersion = "1.8.6-tv.1";
+    internal const string TvVersion = "1.8.6-tv.2";
     internal const string TvProductName = "BiliDeskTV";
 
     public static MainViewModel MainVm { get; } = new();

@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Interop;
 using BiliDesk.Views;
 using BiliDesk.Models;
+using BiliDesk.Views.TV;
 
 namespace BiliDesk.Services;
 
@@ -64,7 +65,7 @@ public class PlayerService
     public void PlayVideo(string bvid, string? title = null, BiliDesk.Models.BangumiPlaylist? bangumi = null)
         => Play(title, win => win.PlayVideo(bvid, bangumi));
 
-    internal bool PlayTvVideo(VideoItem video, Window owner, Action onReturn)
+    internal bool PlayTvVideo(VideoItem video, TvWindow owner, Action onReturn)
     {
         var win = GetOrCreateWindow();
         if (win == null) return false;

@@ -63,7 +63,8 @@ public class SearchViewModel : ObservableObject
 
     // ---------------- 搜索类别(视频 / 直播间 / 番剧 / UP主) ----------------
 
-    private ContentKind _kind = Svc.Settings.SearchKind;
+    private ContentKind _kind;
+    private readonly bool _useDesktopPreferences;
 
     /// <summary>
     /// 当前搜的是哪一类(视频 / 直播间 / 番剧 / UP主)。切换时**重新搜一次**(带着同一个关键词) ——
@@ -72,39 +73,42 @@ public class SearchViewModel : ObservableObject
     public ContentKind Kind
     {
         get => _kind;
-        set
-        {
-            if (!SetProperty(ref _kind, value)) return;
-            // ★ 记住用户停在哪个类别(2026-11-12 用户报"番剧依然无法被搜索"):
-            //   首页搜索框跳过来时用的是默认类别(视频), 用户每次都得手动切一次「番剧」。
-            //   落盘之后, 切过一次就一直是那个类别。
-            Svc.Settings.SetSearchKind(value);
-            OnPropertyChanged(nameof(IsVideoKind));
-            OnPropertyChanged(nameof(IsLiveKind));
-            OnPropertyChanged(nameof(IsBangumiKind));
-            OnPropertyChanged(nameof(IsUserKind));
-            // ★★★ IsBangumiSearch / IsUserSearch / IsVideoSearch **必须**一起通知
-            //   (2026-11-12 用户截图报"番剧 tab 选中但结果一片空白"的真根因):
-            //   三个结果列表的 Visibility 分别绑这三个只读投影, setter 里漏通知就永远是
-            //   构造时那个值 ⇒ 列表恒 Collapsed / 恒 Visible 但绑的是空集合, 界面就是
-            //   "tab 选中、啥也没有"。★ tab 的高亮绑的是 IsXxxKind(那些已经逐条通知),
-            //   所以看起来更像是"只有结果没出来"。
-            OnPropertyChanged(nameof(IsBangumiSearch));
-            OnPropertyChanged(nameof(IsUserSearch));
-            OnPropertyChanged(nameof(IsVideoSearch));
-            OnPropertyChanged(nameof(IdleHint));
-            OnPropertyChanged(nameof(ResultCount));
-            // 换类别 = 换一套结果: 清空旧结果并重搜(没搜过关键词就只是清一下)
-            _generation++;          // 让在途请求的结果作废, 免得旧类别的响应灌进新列表
-            Results.Clear();
-            BangumiResults.Clear(); // ★ 番剧也要清 —— 否则切回视频/直播时海报还挂在那儿
-            UserResults.Clear();    // ★ 用户同样要清 —— 否则切回视频时上一批头像还挂在列表里
-            Error = "";
-            Blocked = false;
-            HasMore = false;
-            if (_lastKeyword != null) _ = SearchAsync();
-            else OnPropertyChanged(nameof(IsIdle));
-        }
+        set => _ = ChangeKindAsync(value);
+    }
+
+    internal Task ChangeKindAsync(ContentKind value)
+    {
+        if (!SetProperty(ref _kind, value, nameof(Kind))) return Task.CompletedTask;
+        // ★ 记住用户停在哪个类别(2026-11-12 用户报"番剧依然无法被搜索"):
+        //   首页搜索框跳过来时用的是默认类别(视频), 用户每次都得手动切一次「番剧」。
+        //   落盘之后, 切过一次就一直是那个类别。
+        if (_useDesktopPreferences) Svc.Settings.SetSearchKind(value);
+        OnPropertyChanged(nameof(IsVideoKind));
+        OnPropertyChanged(nameof(IsLiveKind));
+        OnPropertyChanged(nameof(IsBangumiKind));
+        OnPropertyChanged(nameof(IsUserKind));
+        // ★★★ IsBangumiSearch / IsUserSearch / IsVideoSearch **必须**一起通知
+        //   (2026-11-12 用户截图报"番剧 tab 选中但结果一片空白"的真根因):
+        //   三个结果列表的 Visibility 分别绑这三个只读投影, setter 里漏通知就永远是
+        //   构造时那个值 ⇒ 列表恒 Collapsed / 恒 Visible 但绑的是空集合, 界面就是
+        //   "tab 选中、啥也没有"。★ tab 的高亮绑的是 IsXxxKind(那些已经逐条通知),
+        //   所以看起来更像是"只有结果没出来"。
+        OnPropertyChanged(nameof(IsBangumiSearch));
+        OnPropertyChanged(nameof(IsUserSearch));
+        OnPropertyChanged(nameof(IsVideoSearch));
+        OnPropertyChanged(nameof(IdleHint));
+        OnPropertyChanged(nameof(ResultCount));
+        // 换类别 = 换一套结果: 清空旧结果并重搜(没搜过关键词就只是清一下)
+        _generation++;          // 让在途请求的结果作废, 免得旧类别的响应灌进新列表
+        Results.Clear();
+        BangumiResults.Clear(); // ★ 番剧也要清 —— 否则切回视频/直播时海报还挂在那儿
+        UserResults.Clear();    // ★ 用户同样要清 —— 否则切回视频时上一批头像还挂在列表里
+        Error = "";
+        Blocked = false;
+        HasMore = false;
+        if (_lastKeyword != null) return SearchAsync();
+        OnPropertyChanged(nameof(IsIdle));
+        return Task.CompletedTask;
     }
 
     /// <summary>XAML 里四个 RadioButton 的绑定(IsChecked 只支持 bool, 所以给四个派生属性)</summary>
@@ -235,8 +239,12 @@ public class SearchViewModel : ObservableObject
     public ICommand RetryCommand { get; }
     public ICommand OpenWebSearchCommand { get; }
 
-    public SearchViewModel()
+    public SearchViewModel() : this(useDesktopPreferences: true) { }
+
+    internal SearchViewModel(bool useDesktopPreferences)
     {
+        _useDesktopPreferences = useDesktopPreferences;
+        _kind = useDesktopPreferences ? Svc.Settings.SearchKind : ContentKind.Video;
         // ★ 初始类别来自设置(上次停在哪个 tab), 所以要把四个投影属性各通知一次 ——
         //   否则 RadioButton 组的 IsChecked 全绑到 false, 界面表现为"四个 tab 一个都没选"。
         //   (XAML 里四个按钮都没写 IsChecked="True", 选中态完全靠这些绑定。)

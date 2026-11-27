@@ -5,7 +5,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace BiliDesk.Views.TV;
@@ -14,7 +13,6 @@ internal partial class TvPlaybackControls : UserControl
 {
     internal sealed record Entry(string Label, Action Run, bool Current = false);
 
-    private static readonly Brush FocusBrush = (Brush)new BrushConverter().ConvertFromString("#84E4FF")!;
     private Button? _commandFocus;
     private Button? _menuFocus;
 
@@ -70,7 +68,7 @@ internal partial class TvPlaybackControls : UserControl
         int step = key is TvKey.Left or TvKey.Up ? -1 : 1;
         int next = Math.Clamp(index + step, 0, children.Count - 1);
         if (next == index) return;
-        selected!.BorderBrush = Brushes.Transparent;
+        selected!.ClearValue(Control.BorderBrushProperty);
         var target = (Button)children[next];
         if (menu) _menuFocus = target;
         else _commandFocus = target;
@@ -105,7 +103,7 @@ internal partial class TvPlaybackControls : UserControl
                 if (panel == Options) { _menuFocus = item; }
                 else if (!ReferenceEquals(item, _commandFocus))
                 {
-                    if (_commandFocus != null) _commandFocus.BorderBrush = Brushes.Transparent;
+                    _commandFocus?.ClearValue(Control.BorderBrushProperty);
                     _commandFocus = item;
                     Highlight(item);
                 }
@@ -120,7 +118,7 @@ internal partial class TvPlaybackControls : UserControl
     private void Highlight(Button? button)
     {
         if (button == null) return;
-        button.BorderBrush = FocusBrush;
+        button.SetResourceReference(Control.BorderBrushProperty, "TvFocus");
         Dispatcher.BeginInvoke(DispatcherPriority.Input, () =>
         {
             if (!button.IsVisible || button != (Layer == TvPlayerLayer.Menu ? _menuFocus : _commandFocus)) return;

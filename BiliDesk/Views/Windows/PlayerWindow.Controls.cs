@@ -1161,7 +1161,10 @@ public partial class PlayerWindow : FluentWindow
     /// <summary>切换清晰度: 记住播放进度, 换流后自动恢复</summary>
     private async Task SwitchQualityAsync(int qn)
     {
-        if (_closing || _switchingQuality || _currentCid <= 0) return;
+        if (_closing || _switchingQuality || _currentCid <= 0 || _tvDolbyStartup?.IsEnabled == true) return;
+        bool selectDolby = IsTvPresentation && qn == QualityMenuPolicy.DolbyVision;
+        bool startedDolbySwitch = false;
+        int loadGeneration = _loadGen;
         _switchingQuality = true;
         try
         {
@@ -1174,14 +1177,23 @@ public partial class PlayerWindow : FluentWindow
             var (_, playErr, main, backups, _, qualities, actualQn, audioUrl, remux,
                  _, _, _, _) =
                 await Svc.Api.GetPlayUrlAsync(_currentBvid, _currentCid, qn,
-                    Svc.Settings.PreferredAudioTier);
-            if (_closing) return;
+                    Svc.Settings.PreferredAudioTier, tvPlayback: IsTvPresentation);
+            if (_closing || loadGeneration != _loadGen) return;
+
+            if (selectDolby && (actualQn != QualityMenuPolicy.DolbyVision || string.IsNullOrEmpty(main)))
+            {
+                _qualities.RemoveAll(item => item.qn == QualityMenuPolicy.DolbyVision);
+                FillQualityMenu(_currentQn);
+                HideLoading();
+                OnToast("当前视频或账号暂时无法获取杜比视界，继续播放当前画质");
+                return;
+            }
 
             // 和首次加载同一套: 这一档已缓存就播本地, 没缓存就下完再播(单文件源: 跳转快、结尾完整)
-            var local = ShortVideoCache.TryGet(_currentBvid, actualQn);
-            if (local == null && ShortVideoCache.WorthCaching(remux))
+            var local = selectDolby ? null : ShortVideoCache.TryGet(_currentBvid, actualQn);
+            if (!selectDolby && local == null && ShortVideoCache.WorthCaching(remux))
                 local = await PrepareShortVideoAsync(remux!, actualQn);
-            if (_closing) return;
+            if (_closing || loadGeneration != _loadGen) return;
 
             var url = local ?? main;
             if (string.IsNullOrEmpty(url) && backups.Count > 0) url = backups[0];
@@ -1196,7 +1208,14 @@ public partial class PlayerWindow : FluentWindow
             // ★ 菜单只增不减(2026-11-20): ≤720P 走 durl, 它的 accept_quality 只到 720P。
             //   直接替换会把 1080P/4K 从菜单里抹掉, 用户切一次低档就再也切不回去。
             //   合并保留本视频已经见过的全部档位, 新列表只做补充。
-            var mergedQualities = QualityMenuPolicy.Merge(_qualities, qualities);
+            if (selectDolby)
+            {
+                resumeMs = Math.Max(0, SafeReadTime());
+                ArmTvDolbyFallback(resumeMs);
+                startedDolbySwitch = true;
+            }
+            else ClearTvDolbyFallback();
+            var mergedQualities = QualityMenuPolicy.Merge(_qualities, qualities, TvDolbyEnabled);
             _qualities.Clear();
             _qualities.AddRange(mergedQualities);
             FillQualityMenu(actualQn > 0 ? actualQn : qn);
@@ -1223,15 +1242,17 @@ public partial class PlayerWindow : FluentWindow
             try { _mp.Stop(); } catch { }
             // ★ 聆听态下切清晰度: 仍然只播音轨(用户此刻要的是声音, 不该突然出画面再切回去)。
             //   没有可用音轨时退回整路播放, 至少不会什么都不播。
-            if (_isListenMode && !string.IsNullOrEmpty(_listenAudioUrl))
-                PlayMedia(BuildMedia(_listenAudioUrl!, null));
-            else
-                PlayMedia(BuildMedia(url!, _lastAudioUrl));
+            bool started = _isListenMode && !string.IsNullOrEmpty(_listenAudioUrl)
+                ? PlayMedia(BuildMedia(_listenAudioUrl!, null))
+                : PlayMedia(BuildMedia(url!, _lastAudioUrl));
+            if (!started && selectDolby && !TryRestoreTvDolby(_mediaEpoch))
+                ShowFail("杜比视界播放失败，请选择其他画质。");
             UpdatePlayButton();
         }
         catch (Exception ex)
         {
-            if (_closing) return;
+            if (_closing || loadGeneration != _loadGen) return;
+            if (startedDolbySwitch && _tvDolbyFallback is { } fallback && TryRestoreTvDolby(fallback.Epoch)) return;
             Svc.Toast.Show("切换清晰度失败: " + ex.Message);
             HideLoading();
         }

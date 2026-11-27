@@ -1,6 +1,8 @@
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
+using BiliDesk.Helpers;
 using BiliDesk.Views.TV;
 
 namespace BiliDesk.Views;
@@ -9,9 +11,16 @@ public partial class PlayerWindow
 {
     private TvPlaybackControls? _tvPlayback;
     private TvCursor? _tvCursor;
+    private TvTheme? _tvTheme;
     private bool IsTvPresentation => _tvPlayback != null;
+    private bool TvDolbyEnabled => IsTvPresentation && Svc.Settings.TvDolbyVision;
+    private DispatcherTimer? _tvDolbyStartup;
+    private TvDolbyFallback? _tvDolbyFallback;
 
-    internal void BeginTvPresentation(Window owner)
+    private sealed record TvDolbyFallback(int Epoch, int Quality, long Position, string Url,
+        string? AudioUrl, string? ListenAudioUrl, string[] Backups);
+
+    internal void BeginTvPresentation(TvWindow owner)
     {
         if (IsTvPresentation) return;
         if (_isFullscreen) ToggleFullscreen();
@@ -23,6 +32,10 @@ public partial class PlayerWindow
         ShowControls();
         ControlBar.Visibility = Visibility.Collapsed;
         _tvPlayback = new TvPlaybackControls(TimeText, ProgressSlider) { VerticalAlignment = VerticalAlignment.Bottom };
+        _tvTheme = owner.Theme;
+        _tvTheme.Attach(_tvPlayback);
+        _tvTheme.Refresh();
+        Activated += OnTvActivated;
         System.Windows.Controls.Panel.SetZIndex(_tvPlayback, 10);
         VideoAreaRoot.Children.Add(_tvPlayback);
         _tvCursor = new TvCursor(VideoAreaRoot);
@@ -34,6 +47,9 @@ public partial class PlayerWindow
     internal void EndTvPresentation(bool restoreDesktop)
     {
         if (_tvPlayback == null) return;
+        ClearTvDolbyFallback();
+        Activated -= OnTvActivated;
+        _tvTheme = null;
         _tvCursor?.Dispose();
         _tvCursor = null;
         VideoAreaRoot.Children.Remove(_tvPlayback);
@@ -41,6 +57,59 @@ public partial class PlayerWindow
         if (!restoreDesktop) return;
         ControlBar.Visibility = Visibility.Visible;
         if (_isFullscreen) ToggleFullscreen();
+    }
+
+    private void OnTvActivated(object? sender, System.EventArgs args) => _tvTheme?.Refresh();
+
+    private void ArmTvDolbyFallback(long position)
+    {
+        ClearTvDolbyFallback();
+        if (string.IsNullOrEmpty(_lastPlayUrl)) return;
+        _tvDolbyFallback = new TvDolbyFallback(_mediaEpoch + 1, _currentQn, position, _lastPlayUrl,
+            _lastAudioUrl, _listenAudioUrl, _backups.ToArray());
+        _tvDolbyStartup = new DispatcherTimer { Interval = System.TimeSpan.FromSeconds(15) };
+        _tvDolbyStartup.Tick += (_, _) =>
+        {
+            if (!TryRestoreTvDolby(_mediaEpoch)) ClearTvDolbyFallback();
+        };
+        _tvDolbyStartup.Start();
+    }
+
+    private void ClearTvDolbyFallback()
+    {
+        _tvDolbyStartup?.Stop();
+        _tvDolbyStartup = null;
+        _tvDolbyFallback = null;
+    }
+
+    private bool TryRestoreTvDolby(int epoch)
+    {
+        if (_closing || _tvDolbyFallback is not { } fallback || fallback.Epoch != epoch) return false;
+        ClearTvDolbyFallback();
+        CancelRemuxPrefetch();
+        _lastPlayUrl = fallback.Url;
+        _lastAudioUrl = fallback.AudioUrl;
+        _listenAudioUrl = fallback.ListenAudioUrl;
+        RememberPlayUrlFreshness(fallback.Url, fallback.Backups);
+        _resumeAfterSwitchMs = fallback.Position;
+        _resumeByStartTime = false;
+        FillQualityMenu(fallback.Quality);
+        _tvPlayback?.UpdateLabel(1, TvQualityLabel);
+        ShowLoading("正在恢复上一个画质…");
+        OnToast("杜比视界播放失败，正在恢复上一个画质");
+        try
+        {
+            _mp.Stop();
+            if (!PlayMedia(BuildMedia(fallback.Url, fallback.AudioUrl)))
+                ShowFail("恢复播放失败，请重试。");
+        }
+        catch (System.Exception error)
+        {
+            App.ReportError(error);
+            ShowFail("恢复播放失败，请重试。");
+        }
+        UpdatePlayButton();
+        return true;
     }
 
     private bool HandleTvInput(KeyEventArgs args)
@@ -96,8 +165,9 @@ public partial class PlayerWindow
 
     private void ShowTvQualities()
     {
-        if (_qualities.Count == 0) { ShowTvMessage("当前暂无可选画质"); return; }
-        _tvPlayback?.OpenMenu(_qualities.Select(item => new TvPlaybackControls.Entry(item.label, async () =>
+        var items = _qualities.Where(item => QualityMenuPolicy.IsMenuTier(item.qn, TvDolbyEnabled)).ToArray();
+        if (items.Length == 0) { ShowTvMessage("当前暂无可选画质"); return; }
+        _tvPlayback?.OpenMenu(items.Select(item => new TvPlaybackControls.Entry(item.label, async () =>
         {
             _tvPlayback?.CloseMenu();
             if (item.qn != _currentQn) await SwitchQualityAsync(item.qn);

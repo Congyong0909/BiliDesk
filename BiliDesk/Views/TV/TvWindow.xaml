@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:helpers="clr-namespace:BiliDesk.Helpers"
         Title="BiliDesk TV" WindowStyle="None" ResizeMode="NoResize" WindowStartupLocation="Manual"
-        Background="#10151E" Foreground="#F5F7FA" UseLayoutRounding="True">
+        Background="{DynamicResource TvSurface}" Foreground="{DynamicResource TvText}" UseLayoutRounding="True">
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -12,16 +12,28 @@
             <Style TargetType="Button" BasedOn="{StaticResource TvButton}" />
             <DataTemplate x:Key="VideoCard">
                 <StackPanel>
-                    <Border Background="#141D2B" Height="{Binding CoverHeight}" ClipToBounds="True"
+                    <Border Background="{DynamicResource TvCoverBackground}" Height="{Binding CoverHeight}" ClipToBounds="True"
                             helpers:Cover.Source="{Binding Video.Cover}" />
                     <TextBlock Text="{Binding Video.Title}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
-                               FontSize="19" LineHeight="25" MaxHeight="50" Margin="0,7,0,0" />
-                    <DockPanel Margin="0,5,0,0" LastChildFill="True" TextElement.Foreground="#CCD6E3"
-                               TextElement.FontSize="16">
-                        <TextBlock DockPanel.Dock="Right" Text="{Binding Video.Duration}" Margin="6,0,0,0" />
-                        <TextBlock Text="{Binding Video.Author}" TextTrimming="CharacterEllipsis" />
+                               Foreground="{DynamicResource TvText}" FontSize="19" LineHeight="25" MaxHeight="50" Margin="0,7,0,0" />
+                    <DockPanel Margin="0,5,0,0" LastChildFill="True" TextElement.FontSize="16">
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding Video.Duration}" Margin="6,0,0,0"
+                                   Foreground="{DynamicResource TvTextSecondary}" />
+                        <TextBlock Text="{Binding Byline}" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource TvTextSecondary}" />
                     </DockPanel>
                 </StackPanel>
+            </DataTemplate>
+            <DataTemplate x:Key="UserCard">
+                <DockPanel Margin="10,8" LastChildFill="True">
+                    <Border DockPanel.Dock="Left" Width="56" Height="56" Margin="0,0,12,0" CornerRadius="28"
+                            Background="{DynamicResource TvCoverBackground}" helpers:Cover.Source="{Binding User.Face}" />
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding User.Name}" Foreground="{DynamicResource TvText}"
+                                   FontSize="21" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding User.FansText}" FontSize="16" Foreground="{DynamicResource TvTextSecondary}" />
+                    </StackPanel>
+                </DockPanel>
             </DataTemplate>
         </ResourceDictionary>
     </Window.Resources>
@@ -35,7 +47,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
-            <TextBlock Text="BiliDesk TV" FontSize="27" FontWeight="SemiBold" Margin="3,0,20,0"
+            <TextBlock Text="BiliDesk TV" Foreground="{DynamicResource TvText}" FontSize="27" FontWeight="SemiBold" Margin="3,0,20,0"
                        VerticalAlignment="Center" />
             <WrapPanel x:Name="Navigation" Grid.Column="1" />
         </Grid>
@@ -43,15 +55,18 @@
                       VerticalScrollBarVisibility="Hidden" Focusable="False">
             <StackPanel>
                 <StackPanel x:Name="SearchPanel" Visibility="Collapsed">
+                    <WrapPanel x:Name="SearchKinds" Margin="0,0,0,5" />
                     <DockPanel Margin="4,0,4,8">
-                        <Button x:Name="SearchButton" DockPanel.Dock="Right" Content="搜索视频" Click="OnSearch" />
+                        <Button x:Name="SearchButton" DockPanel.Dock="Right" Content="搜索" Click="OnSearch" />
                         <TextBox x:Name="SearchBox" FontSize="23" Padding="12,6" Margin="0,4,8,4"
-                                 VerticalContentAlignment="Center" AutomationProperties.Name="搜索关键词" />
+                                 Style="{StaticResource TvSearchInput}" AutomationProperties.Name="搜索关键词" />
                     </DockPanel>
                     <WrapPanel x:Name="Suggestions" Margin="0,0,0,8" />
                 </StackPanel>
+                <TextBlock x:Name="SectionTitle" Foreground="{DynamicResource TvText}" Visibility="Collapsed" Margin="5,0,5,10" FontSize="26"
+                           FontWeight="SemiBold" />
                 <WrapPanel x:Name="Choices" Margin="0,0,0,6" />
-                <TextBlock x:Name="Status" Margin="5,10,5,12" FontSize="21" Foreground="#D6E1F0"
+                <TextBlock x:Name="Status" Margin="5,10,5,12" FontSize="21" Foreground="{DynamicResource TvTextSecondary}"
                            TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
                 <WrapPanel x:Name="Cards" />
                 <WrapPanel x:Name="Actions" Margin="0,7,0,12" />

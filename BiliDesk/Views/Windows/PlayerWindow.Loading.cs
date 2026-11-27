@@ -821,6 +821,7 @@ public partial class PlayerWindow : FluentWindow
     /// </summary>
     private void ResetForNewMedia()
     {
+        ClearTvDolbyFallback();
         // ★ 自动连播: 换片就收掉倒计时。本条换片可能是连播自己发起的(已经停表, 幂等),
         //   更可能是用户手动换的 —— 后者若还留着倒计时, 它会在新片播到一半时突然换走。
         //   注意: 会话状态(队列/起点)**这里不清**, 由 EnsureAutoPlaySession 显式决定。
@@ -1623,7 +1624,7 @@ public partial class PlayerWindow : FluentWindow
             var (playOk, playErr, main, backups, durMs, qualities, actualQn, audioUrl, remux,
                  lastPlayMs, lastPlayCid, _, _) =
                 await Svc.Api.GetPlayUrlAsync(_currentBvid, _currentCid, _currentQn,
-                    Svc.Settings.PreferredAudioTier, needFullQualityMenu: true);
+                    Svc.Settings.PreferredAudioTier, needFullQualityMenu: true, tvPlayback: IsTvPresentation);
             tPlayUrl = sw.ElapsedMilliseconds;
             if (_closing || gen != _loadGen) return;
             // 以前这里不判成败, 直接拿 main 往下走 —— 取不到地址时 main 是 null, 一路走到
@@ -1642,7 +1643,7 @@ public partial class PlayerWindow : FluentWindow
             // ★ 菜单只增不减(2026-11-20): 与切档同一条规则 —— 本视频已经见过的档位
             //   不能被一次"只回了低档"的取流结果抹掉。换片时 ResetForNewMedia 已清空,
             //   所以这里不会把上一条视频的档位带过来。
-            var mergedQualities = QualityMenuPolicy.Merge(_qualities, qualities);
+            var mergedQualities = QualityMenuPolicy.Merge(_qualities, qualities, TvDolbyEnabled);
             _qualities.Clear();
             _qualities.AddRange(mergedQualities);
             FillQualityMenu(actualQn);
@@ -1829,6 +1830,8 @@ public partial class PlayerWindow : FluentWindow
             //   旧 input 排队中的 Playing/EndReached/TimeChanged 会因为这个比对失败被丢弃,
             //   不会再把"上一条播完了/上一条的时间"写到新片身上。
             _mediaEpoch++;
+            if (_currentQn == QualityMenuPolicy.DolbyVision && _tvDolbyFallback is { } fallback)
+                _tvDolbyFallback = fallback with { Epoch = _mediaEpoch };
             // 首帧计时只用于诊断日志: 每次起播(含切清晰度/重播/直播)都会重置。
             _playWatch = Stopwatch.StartNew();
             var ok = _mp.Play(media);
